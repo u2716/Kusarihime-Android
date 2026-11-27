@@ -24,7 +24,7 @@ jobs:
         run: |
           sdkmanager --install "platforms;android-34" "build-tools;34.0.0" "ndk;${ANDROID_NDK_VERSION}"
           echo "ANDROID_NDK_HOME=${ANDROID_HOME}/ndk/${ANDROID_NDK_VERSION}" >> $GITHUB_ENV
-      - name: Install test fonts (for cargo test)
+      - name: Install fonts
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends fonts-ipafont-gothic fonts-ipafont-mincho fonts-wqy-zenhei
@@ -44,7 +44,6 @@ jobs:
           find ../android/app/src/main/jniLibs -name "*.so" -print
       - name: Bundle open-source fonts into assets/Fonts
         run: |
-          # fonts already installed by 'Install test fonts' step above, just copy them
           mkdir -p src/android/app/src/main/assets/Fonts
           cp /usr/share/fonts/opentype/ipafont-gothic/ipag.ttf src/android/app/src/main/assets/Fonts/jp_gothic.ttf
           cp /usr/share/fonts/opentype/ipafont-mincho/ipam.ttf src/android/app/src/main/assets/Fonts/jp_mincho.ttf
@@ -54,7 +53,7 @@ jobs:
         run: gradle -p src/android assembleDebug --stacktrace --no-daemon
       - uses: actions/upload-artifact@v5
         with:
-          name: fujihime-android-debug-apk
+          name: 腐り姫～euthanasia～-android-debug-apk
           path: src/android/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 30

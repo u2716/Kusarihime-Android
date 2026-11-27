@@ -23,6 +23,7 @@ class GameView(ctx: Context, val bridge: EngineBridge, val onQuickMenu: () -> Un
     fun viewportRect(w: Float, h: Float): FloatArray { val target = EngineBridge.GAME_WIDTH.toFloat() / EngineBridge.GAME_HEIGHT; val view = w / h; return if (view > target) { val rw = h * target; floatArrayOf((w - rw) / 2, 0f, rw, h) } else { val rh = w / target; floatArrayOf(0f, (h - rh) / 2, w, rh) } }
     fun viewToGame(x: Float, y: Float): Pair<Int, Int>? { val r = viewportRect(width.toFloat(), height.toFloat()); if (x < r[0] || x > r[0] + r[2] || y < r[1] || y > r[1] + r[3]) return null; return ((x - r[0]) / r[2] * EngineBridge.GAME_WIDTH).toInt().coerceIn(0, 799) to ((y - r[1]) / r[3] * EngineBridge.GAME_HEIGHT).toInt().coerceIn(0, 599) }
     fun clampedViewToGame(x: Float, y: Float): Pair<Int, Int> { val r = viewportRect(width.toFloat(), height.toFloat()); val cx = x.coerceIn(r[0], r[0] + r[2]); val cy = y.coerceIn(r[1], r[1] + r[3]); return ((cx - r[0]) / r[2] * EngineBridge.GAME_WIDTH).toInt().coerceIn(0, 799) to ((cy - r[1]) / r[3] * EngineBridge.GAME_HEIGHT).toInt().coerceIn(0, 599) }
+    fun resetTouchState() { cancelPendingLongPress(); activePointerId = -1; touchSentDown = false; multiTouch = false; longPressFired = false; panAccY = 0f; secondMoved = false }
     private fun cancelPendingLongPress() { mainHandler.removeCallbacks(longPressRunnable) }
     private fun finishSingle(cancelled: Boolean) { cancelPendingLongPress(); if (longPressFired) bridge.keyEvent(0x11, false) else if (touchSentDown && !multiTouch) { if (!cancelled) { val p = clampedViewToGame(touchStartX, touchStartY); bridge.pointerEvent(2, p.first, p.second) } else bridge.pointerEvent(2, -1, -1) }; activePointerId = -1; touchSentDown = false; longPressFired = false }
     override fun onTouchEvent(e: MotionEvent): Boolean {
@@ -55,7 +56,7 @@ class GameView(ctx: Context, val bridge: EngineBridge, val onQuickMenu: () -> Un
         override fun onSurfaceChanged(gl: GL10?, w: Int, h: Int) { GLES20.glViewport(0, 0, w, h) }
         override fun onDrawFrame(gl: GL10?) {
             val now = System.nanoTime(); val delta = if (lastNs == 0L) 16 else ((now - lastNs) / 1_000_000).toInt().coerceIn(1, 100); lastNs = now
-            if (!bridge.hasGameAssets) { GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT); return }
+            if (bridge.isDestroyed || !bridge.hasGameAssets) { GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT); return }
             bridge.tick(delta)
             if (bridge.copyPresent()) { GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, texture); GLES20.glTexImage2D(GLES20.GL_TEXTURE_2D, 0, GLES20.GL_RGBA, EngineBridge.GAME_WIDTH, EngineBridge.GAME_HEIGHT, 0, GLES20.GL_RGBA, GLES20.GL_UNSIGNED_BYTE, bridge.frameBuffer) }
             GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT); GLES20.glUseProgram(program)

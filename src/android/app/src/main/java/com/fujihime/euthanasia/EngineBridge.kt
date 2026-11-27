@@ -21,6 +21,7 @@ class EngineBridge(private val context: Context) {
     var hasGameAssets: Boolean = false; private set
     var currentLanguageMode: Int = prefs.getInt("fujihime.language_mode", LANG_JP); private set
     var loadedFontSummary: String = "none"; private set
+    var isDestroyed = false; private set
     private var handle: Long = 0
     val frameBuffer: ByteBuffer = ByteBuffer.allocateDirect(PRESENT_LEN).order(ByteOrder.nativeOrder())
     init {
@@ -49,7 +50,7 @@ class EngineBridge(private val context: Context) {
         import2002CdSaveIfPresentOnStartup()
         startTitle(); return true
     }
-    @Synchronized fun destroy() { if (handle != 0L) { nativeDestroy(handle); handle = 0 } }
+    @Synchronized fun destroy() { isDestroyed = true; if (handle != 0L) { try { nativeDestroy(handle) } catch (_: Exception) {}; handle = 0 } }
     private fun findFontBytes(candidates: List<String>): Pair<String, ByteArray>? {
         for (name in candidates) {
             val f = File(fontsDirPath, name); if (f.exists() && f.length() > 0) return name to f.readBytes()
