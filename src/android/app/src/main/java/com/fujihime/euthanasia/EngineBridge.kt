@@ -3,6 +3,8 @@ import android.content.Context
 import java.io.File
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import java.util.Calendar
+import java.util.concurrent.ConcurrentLinkedQueue
 
 data class PendingDialogInfo(val id: Long, val kind: Int, val title: String, val message: String)
 data class EngineState(val scene: Int, val languageMode: Int, val isPlayingVideo: Boolean, val isWaitingClick: Boolean, val isWaitingSelect: Boolean, val isTransitioning: Boolean, val exitRequested: Boolean, val scriptId: Int, val pc: Long)
@@ -23,6 +25,9 @@ class EngineBridge(private val context: Context) {
     var loadedFontSummary: String = "none"; private set
     var isDestroyed = false; private set
     private var handle: Long = 0
+    private val pendingActions = ConcurrentLinkedQueue<Int>()
+    fun queueAction(a: Int) { pendingActions.add(a) }
+    fun drainPendingActions() { while (true) { val a = pendingActions.poll() ?: break; if (handle != 0L) { try { nativePerformAction(handle, a) } catch (_: Exception) {} } } }
     val frameBuffer: ByteBuffer = ByteBuffer.allocateDirect(PRESENT_LEN).order(ByteOrder.nativeOrder())
     init {
         val filesDir = context.filesDir
@@ -69,12 +74,15 @@ class EngineBridge(private val context: Context) {
         loadedFontSummary = if (parts.isEmpty()) "none" else parts.joinToString(", ")
     }
     @Synchronized fun startTitle(): Boolean = handle != 0L && nativeStartTitle(handle) == 0
-    @Synchronized fun tick(deltaMs: Int): Boolean = handle != 0L && nativeTick(handle, deltaMs) == 0
+    @Synchronized fun tick(deltaMs: Int): Boolean { if (handle == 0L) return false; drainPendingActions(); return nativeTick(handle, deltaMs) == 0 }
     @Synchronized fun copyPresent(): Boolean { if (handle == 0L) return false; frameBuffer.clear(); return nativeCopyPresent(handle, frameBuffer) == 0 }
     @Synchronized fun renderAudio(buf: ByteBuffer, frames: Int): Int { if (handle == 0L) return 0; buf.clear(); return nativeRenderAudio(handle, buf, frames) }
     @Synchronized fun pointerEvent(kind: Int, x: Int, y: Int) { if (handle != 0L) nativePointerEvent(handle, kind, x, y) }
     @Synchronized fun keyEvent(vk: Int, down: Boolean) { if (handle != 0L) nativeKeyEvent(handle, vk, down) }
     @Synchronized fun performAction(a: Int) { if (handle != 0L) nativePerformAction(handle, a) }
+    fun syncTime() { if (handle == 0L) return; val c = Calendar.getInstance(); try { nativeSyncTime(handle, c.get(Calendar.YEAR), c.get(Calendar.MONTH) + 1, c.get(Calendar.DAY_OF_MONTH), c.get(Calendar.HOUR_OF_DAY), c.get(Calendar.MINUTE)) } catch (_: Exception) {} }
+    @Synchronized fun saveSlot(slot: Int): Boolean { if (handle == 0L) return false; val c = Calendar.getInstance(); return nativeSaveSlot(handle, slot, c.get(Calendar.YEAR), c.get(Calendar.MONTH) + 1, c.get(Calendar.DAY_OF_MONTH), c.get(Calendar.HOUR_OF_DAY), c.get(Calendar.MINUTE)) == 0 }
+    @Synchronized fun loadSlot(slot: Int): Boolean = handle != 0L && nativeLoadSlot(handle, slot) == 0
     @Synchronized fun saveGlobal(): Boolean = handle != 0L && nativeSaveGlobal(handle) == 0
     @Synchronized fun setLanguageMode(mode: Int): Boolean {
         if (handle == 0L) return false
@@ -98,6 +106,7 @@ class EngineBridge(private val context: Context) {
     private external fun nativeKeyEvent(handle: Long, vk: Int, down: Boolean): Int
     private external fun nativePerformAction(handle: Long, action: Int): Int
     private external fun nativeSaveGlobal(handle: Long): Int
+    private external fun nativeSyncTime(handle: Long, y: Int, mo: Int, d: Int, h: Int, mi: Int): Int
     private external fun nativeSaveSlot(handle: Long, slot: Int, y: Int, mo: Int, d: Int, h: Int, mi: Int): Int
     private external fun nativeLoadSlot(handle: Long, slot: Int): Int
     private external fun nativeRollback(handle: Long): Int

@@ -4,6 +4,7 @@
 use std::collections::{HashMap, VecDeque};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use encoding_rs::{GBK, SHIFT_JIS};
 
@@ -943,6 +944,36 @@ pub struct Engine {
     pub extra_menu: ExtraMenuState,
     pub auto_mode: bool,
     auto_accum_ms: u32,
+}
+
+
+// --- fix_save_menu_freeze: real save timestamp (was hardcoded 2026-11-20 00:00) ---
+static SYNCED_SAVE_TIME: Mutex<(u16, u16, u16, u16, u16)> = Mutex::new((0, 0, 0, 0, 0));
+pub fn set_synced_save_time(y: u16, mo: u16, d: u16, h: u16, mi: u16) {
+    if let Ok(mut t) = SYNCED_SAVE_TIME.lock() { *t = (y, mo, d, h, mi); }
+}
+fn system_now_ymdhm() -> (u16, u16, u16, u16, u16) {
+    let secs = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs() as i64).unwrap_or(0);
+    let days = secs.div_euclid(86400);
+    let sod = secs.rem_euclid(86400);
+    let hour = (sod / 3600) as u16;
+    let minute = ((sod % 3600) / 60) as u16;
+    // Howard Hinnant civil_from_days, no chrono needed
+    let z = days + 719468;
+    let era = z.div_euclid(146097);
+    let doe = z.rem_euclid(146097);
+    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+    let mut y = yoe + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    if m <= 2 { y += 1; }
+    (y as u16, m as u16, d as u16, hour, minute)
+}
+pub fn current_save_time() -> (u16, u16, u16, u16, u16) {
+    if let Ok(t) = SYNCED_SAVE_TIME.lock() { if t.0 != 0 { return *t; } }
+    system_now_ymdhm()
 }
 
 impl Engine {
@@ -2411,7 +2442,7 @@ impl Engine {
                                                 slot_num,
                                             ));
                                         } else {
-                                            self.save_slot(slot_num, 2026, 11, 20, 0, 0)?;
+                                            let (sy, smo, sd, sh, smi) = current_save_time(); self.save_slot(slot_num, sy, smo, sd, sh, smi)?;
                                             self.save_global()?;
                                             self.compose_ui_and_commit()?;
                                         }
@@ -2920,7 +2951,7 @@ impl Engine {
                 self.enter_title_screen()?;
             }
             ConfirmAction::SaveOverwrite(slot) => {
-                self.save_slot(slot, 2026, 11, 20, 0, 0)?;
+                let (sy, smo, sd, sh, smi) = current_save_time(); self.save_slot(slot, sy, smo, sd, sh, smi)?;
                 self.save_global()?;
                 self.compose_ui_and_commit()?;
             }

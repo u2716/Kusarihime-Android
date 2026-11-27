@@ -18,6 +18,8 @@ class GameView(ctx: Context, val bridge: EngineBridge, val onQuickMenu: () -> Un
     private var activePointerId = -1; private var touchStartX = 0f; private var touchStartY = 0f
     private var touchSentDown = false; private var multiTouch = false; private var longPressFired = false
     private var panAccY = 0f; private var secondDownTime = 0L; private var secondMoved = false
+    @Volatile var menuOpen = false; private set
+    fun setMenuOpen(open: Boolean) { menuOpen = open; if (open) renderMode = RENDERMODE_WHEN_DIRTY else { renderMode = RENDERMODE_CONTINUOUSLY; requestRender() } }
     private val longPressRunnable = Runnable { if (activePointerId != -1 && !multiTouch) { longPressFired = true; bridge.keyEvent(0x11, true) } }
     init { setEGLContextClientVersion(2); setRenderer(renderer); renderMode = RENDERMODE_CONTINUOUSLY; isFocusableInTouchMode = true }
     fun viewportRect(w: Float, h: Float): FloatArray { val target = EngineBridge.GAME_WIDTH.toFloat() / EngineBridge.GAME_HEIGHT; val view = w / h; return if (view > target) { val rw = h * target; floatArrayOf((w - rw) / 2, 0f, rw, h) } else { val rh = w / target; floatArrayOf(0f, (h - rh) / 2, w, rh) } }
@@ -57,6 +59,7 @@ class GameView(ctx: Context, val bridge: EngineBridge, val onQuickMenu: () -> Un
         override fun onDrawFrame(gl: GL10?) {
             val now = System.nanoTime(); val delta = if (lastNs == 0L) 16 else ((now - lastNs) / 1_000_000).toInt().coerceIn(1, 100); lastNs = now
             if (bridge.isDestroyed || !bridge.hasGameAssets) { GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT); return }
+            if (menuOpen) { GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT); return }
             bridge.tick(delta)
             if (bridge.copyPresent()) { GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, texture); GLES20.glTexImage2D(GLES20.GL_TEXTURE_2D, 0, GLES20.GL_RGBA, EngineBridge.GAME_WIDTH, EngineBridge.GAME_HEIGHT, 0, GLES20.GL_RGBA, GLES20.GL_UNSIGNED_BYTE, bridge.frameBuffer) }
             GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT); GLES20.glUseProgram(program)

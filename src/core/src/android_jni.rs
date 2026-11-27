@@ -177,3 +177,14 @@ pub unsafe extern "system" fn Java_com_fujihime_euthanasia_EngineBridge_nativeRe
     let slice = std::slice::from_raw_parts_mut(addr, n * 2);
     fujihime_engine_render_audio_f32(handle as *mut FujihimeEngine, slice.as_mut_ptr(), n) as jint
 }
+
+
+// --- fix_save_menu_freeze: syncTime -> engine.rs (not an isolated static) ---
+#[no_mangle]
+pub unsafe extern "system" fn Java_com_fujihime_euthanasia_EngineBridge_nativeSyncTime<'local>(
+    _env: JNIEnv<'local>, _this: JObject<'local>, handle: jlong, y: jint, mo: jint, d: jint, h: jint, mi: jint,
+) -> jint {
+    if handle == 0 { return FUJIHIME_ERR_INVALID_ARG; }
+    crate::engine::set_synced_save_time(y as u16, mo as u16, d as u16, h as u16, mi as u16);
+    FUJIHIME_OK
+}

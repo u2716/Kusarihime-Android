@@ -41,10 +41,12 @@ class MainActivity : AppCompatActivity() {
         else { val chs = bridge.currentLanguageMode == EngineBridge.LANG_CHS; b.setNegativeButton(if (chs) "否" else "いいえ") { _, _ -> dialogShowing = false; bridge.confirmDialog(dlg.id, false) }; b.setPositiveButton(if (chs) "是" else "はい") { _, _ -> dialogShowing = false; bridge.confirmDialog(dlg.id, true) } }
         b.show()
     }
+    private fun dismissQuickMenu() { quickMenuShowing = false; gameView?.resetTouchState(); gameView?.setMenuOpen(false) }
     private fun showQuickMenu() {
         if (!bridge.hasGameAssets) { showMissingAssets(); return }
         if (quickMenuShowing) return
         quickMenuShowing = true
+        gameView?.setMenuOpen(true)
         val chs = bridge.currentLanguageMode == EngineBridge.LANG_CHS
         val items = mutableListOf<String>(); val actions = mutableListOf<Int>()
         fun add(label: String, act: Int) { items += label; actions += act }
@@ -56,14 +58,14 @@ class MainActivity : AppCompatActivity() {
         add(if (chs) "回到标题画面" else "タイトルに戻る", 8); add(if (chs) "导入 2002 CD 存档" else "2002 CD セーブ取込", -2)
         add(if (chs) "操作说明" else "操作ガイド", -3)
         val header = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(48, 32, 48, 8); addView(TextView(this@MainActivity).apply { text = if (chs) "腐姫 快捷菜单" else "腐姫 クイックメニュー"; textSize = 20f }); addView(TextView(this@MainActivity).apply { text = if (chs) "当前模式：简体中文 V1.0\n字体：${bridge.loadedFontSummary}" else "現在モード：オリジナル日本語\nフォント：${bridge.loadedFontSummary}"; textSize = 14f }) }
-        AlertDialog.Builder(this).setCustomTitle(header).setItems(items.toTypedArray()) { _, which -> quickMenuShowing = false; gameView?.resetTouchState()
+        AlertDialog.Builder(this).setCustomTitle(header).setItems(items.toTypedArray()) { _, which -> dismissQuickMenu()
             when (actions[which]) {
-                -1 -> bridge.setLanguageMode(if (chs) EngineBridge.LANG_JP else EngineBridge.LANG_CHS)
+                -1 -> Thread { try { bridge.setLanguageMode(if (chs) EngineBridge.LANG_JP else EngineBridge.LANG_CHS) } catch (_: Exception) {} }.start()
                 -2 -> saveFilePicker.launch(arrayOf("*/*"))
                 -3 -> showHelp()
-                else -> bridge.performAction(actions[which])
+                else -> { if (actions[which] == 0 || actions[which] == 1) bridge.syncTime(); bridge.queueAction(actions[which]) }
             }
-        }.setNegativeButton(if (chs) "取消" else "キャンセル") { _, _ -> quickMenuShowing = false; gameView?.resetTouchState() }.setOnCancelListener { quickMenuShowing = false; gameView?.resetTouchState() }.setOnDismissListener { quickMenuShowing = false; gameView?.resetTouchState() }.show()
+        }.setNegativeButton(if (chs) "取消" else "キャンセル") { _, _ -> dismissQuickMenu() }.setOnCancelListener { dismissQuickMenu() }.setOnDismissListener { dismissQuickMenu() }.show()
     }
     private fun showHelp() { AlertDialog.Builder(this).setTitle(if (bridge.currentLanguageMode == EngineBridge.LANG_CHS) "操作说明" else "操作ガイド").setMessage("单指点击：左键推进 / 确定\n单指拖动：悬停高亮 / 滑块\n单指长按 (≥0.45s)：按住快进 (Ctrl)\n双指轻点：右键\n双指上下滑动：Backlog\n三指轻点：快捷菜单\n硬件键盘：Enter / Space / Esc / Ctrl / Shift / Tab / 方向键 / PageUp / PageDown / F1").setPositiveButton("OK", null).show() }
     private fun showMissingAssets() {
@@ -115,9 +117,9 @@ class MainActivity : AppCompatActivity() {
         // Android back should close / exit, not open Backlog. Hardware Esc key still sends 0x1B via mapKey().
         if (quickMenuShowing || dialogShowing) return
         if (!bridge.hasGameAssets) { super.onBackPressed(); return }
-        AlertDialog.Builder(this).setTitle(if (bridge.currentLanguageMode == EngineBridge.LANG_CHS) "退出？" else "終了しますか？").setMessage(if (bridge.currentLanguageMode == EngineBridge.LANG_CHS) "回到标题画面，还是关闭应用？" else "タイトルに戻るか、アプリを閉じるか選んでください。").setPositiveButton(if (bridge.currentLanguageMode == EngineBridge.LANG_CHS) "关闭应用" else "アプリを閉じる") { _, _ -> finish() }.setNeutralButton(if (bridge.currentLanguageMode == EngineBridge.LANG_CHS) "回到标题" else "タイトルに戻る") { _, _ -> bridge.performAction(8) }.setNegativeButton(if (bridge.currentLanguageMode == EngineBridge.LANG_CHS) "取消" else "キャンセル", null).show()
+        AlertDialog.Builder(this).setTitle(if (bridge.currentLanguageMode == EngineBridge.LANG_CHS) "退出？" else "終了しますか？").setMessage(if (bridge.currentLanguageMode == EngineBridge.LANG_CHS) "回到标题画面，还是关闭应用？" else "タイトルに戻るか、アプリを閉じるか選んでください。").setPositiveButton(if (bridge.currentLanguageMode == EngineBridge.LANG_CHS) "关闭应用" else "アプリを閉じる") { _, _ -> finish() }.setNeutralButton(if (bridge.currentLanguageMode == EngineBridge.LANG_CHS) "回到标题" else "タイトルに戻る") { _, _ -> bridge.queueAction(8) }.setNegativeButton(if (bridge.currentLanguageMode == EngineBridge.LANG_CHS) "取消" else "キャンセル", null).show()
     }
-    override fun onPause() { super.onPause(); try { window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) } catch (_: Exception) {}; try { gameView?.onPause() } catch (_: Exception) {}; try { audio?.pause() } catch (_: Exception) {}; if (!isDestroying && bridge.hasGameAssets) { try { bridge.saveGlobal() } catch (_: Exception) {} } }
+    override fun onPause() { super.onPause(); try { window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) } catch (_: Exception) {}; try { gameView?.onPause() } catch (_: Exception) {}; try { audio?.pause() } catch (_: Exception) {}; if (!isDestroying && bridge.hasGameAssets) { Thread { try { bridge.saveGlobal() } catch (_: Exception) {} }.start() } }
     override fun onResume() { super.onResume(); gameView?.onResume(); if (bridge.hasGameAssets) audio?.resume() }
     override fun onDestroy() { if (isDestroying) { super.onDestroy(); return }; isDestroying = true; try { window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) } catch (_: Exception) {}; try { gameView?.onPause() } catch (_: Exception) {}; try { audio?.stop() } catch (_: Exception) {}; try { if (bridge.hasGameAssets) bridge.saveGlobal() } catch (_: Exception) {}; try { bridge.destroy() } catch (_: Exception) {}; gameView = null; audio = null; super.onDestroy() }
 }
