@@ -13,6 +13,10 @@ fn add_sources(build: &mut cc::Build, root: &Path, files: &[&str]) {
 fn main() {
     println!("cargo:rerun-if-env-changed=FUJIHIME_SKIP_NATIVE_C_CHECK");
     println!("cargo:rerun-if-env-changed=IPHONEOS_DEPLOYMENT_TARGET");
+    println!("cargo:rerun-if-env-changed=ANDROID_API");
+    println!("cargo:rerun-if-env-changed=ANDROID_NDK_HOME");
+    // Android: cc picks up NDK clang via cargo-ndk (CC_<target>). No -miphoneos flag here;
+    // FreeType + pl_mpeg are plain C and compile unchanged for aarch64-linux-android.
     println!("cargo:rerun-if-changed=third_party/pl_mpeg/pl_mpeg.h");
     println!("cargo:rerun-if-changed=third_party/pl_mpeg/pl_mpeg_shim.c");
     println!("cargo:rerun-if-changed=third_party/freetype2_shim/ft_shim.c");

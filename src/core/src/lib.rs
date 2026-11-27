@@ -26,6 +26,8 @@
 //! - [`ffi`]: Stable C11 ABI FFI boundary (`include/fujihime_core.h`) for Swift iOS 14.4+.
 
 pub mod audio;
+#[cfg(target_os = "android")]
+pub mod android_jni;
 pub mod engine;
 pub mod error;
 pub mod ffi;
